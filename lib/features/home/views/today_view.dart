@@ -12,16 +12,61 @@ import '../../../shared/widgets/quick_add_bar.dart';
 import '../../../shared/widgets/task_list_item.dart';
 import '../../../shared/widgets/undo_snackbar.dart';
 
-/// Today 뷰 — isFocused == true 또는 dueDate == 오늘인 태스크.
+/// Today 뷰 — isFocused == true 또는 dueDate == 오늘인 태스크 + DnD.
 ///
-/// 헤더: 시간대별 그라디언트 + 오늘 날짜 대형 표시
-class TodayView extends ConsumerWidget {
+/// DnD는 focusOrder 필드만 수정한다 (order 필드 불변).
+class TodayView extends ConsumerStatefulWidget {
   const TodayView({super.key, this.onTaskTap});
 
   final void Function(Task)? onTaskTap;
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<TodayView> createState() => _TodayViewState();
+}
+
+class _TodayViewState extends ConsumerState<TodayView> {
+  List<Task>? _optimisticActive;
+
+  void _onReorder(List<Task> active, int oldIndex, int newIndex) async {
+    if (newIndex > oldIndex) newIndex--;
+
+    final items = [...active];
+    final moved = items.removeAt(oldIndex);
+    items.insert(newIndex, moved);
+    setState(() => _optimisticActive = items);
+
+    final prevOrder = newIndex > 0
+        ? (items[newIndex - 1].focusOrder ?? items[newIndex - 1].order)
+        : null;
+    final nextOrder = newIndex < items.length - 1
+        ? (items[newIndex + 1].focusOrder ?? items[newIndex + 1].order)
+        : null;
+
+    final newOrder = _computeOrder(prevOrder, nextOrder);
+    final repo = ref.read(taskRepositoryProvider);
+
+    final needsRebalance = prevOrder != null &&
+        nextOrder != null &&
+        (nextOrder - prevOrder).abs() < 1e-10;
+
+    if (needsRebalance) {
+      await repo.rebalanceOrder(items, useFocusOrder: true);
+    } else {
+      await repo.updateFocusOrder(moved.id, newOrder);
+    }
+
+    setState(() => _optimisticActive = null);
+  }
+
+  double _computeOrder(double? prev, double? next) {
+    if (prev == null && next == null) return 1000.0;
+    if (prev == null) return next! / 2;
+    if (next == null) return prev + 1000.0;
+    return (prev + next) / 2;
+  }
+
+  @override
+  Widget build(BuildContext context) {
     final tasksAsync = ref.watch(_todayTasksProvider);
 
     return Scaffold(
@@ -34,40 +79,48 @@ class TodayView extends ConsumerWidget {
             error: (e, st) =>
                 SliverFillRemaining(child: _ErrorBody(error: e.toString())),
             data: (tasks) {
-              final active = tasks.where((t) => !t.completed).toList()
+              final sorted = tasks.where((t) => !t.completed).toList()
                 ..sort((a, b) {
-                  final aOrder = a.focusOrder ?? a.order;
-                  final bOrder = b.focusOrder ?? b.order;
-                  return aOrder.compareTo(bOrder);
+                  final ao = a.focusOrder ?? a.order;
+                  final bo = b.focusOrder ?? b.order;
+                  return ao.compareTo(bo);
                 });
+              final active = _optimisticActive ?? sorted;
               final completed = tasks.where((t) => t.completed).toList();
 
-              return SliverList(
-                delegate: SliverChildListDelegate([
-                  ...active.map((task) => TaskListItem(
-                        key: ValueKey(task.id),
-                        task: task,
-                        onToggleComplete: () =>
-                            _toggleComplete(context, ref, task),
-                        onTap: () => onTaskTap?.call(task),
-                        onToggleFocus: () => ref
-                            .read(taskRepositoryProvider)
-                            .setFocused(task, isFocused: !task.isFocused),
-                        showProjectName: task.projectId != null,
-                      )),
-                  if (completed.isNotEmpty)
-                    CompletedSection(
-                      tasks: completed,
-                      onToggleComplete: (t) =>
-                          _toggleComplete(context, ref, t),
-                      onTaskTap: (t) => onTaskTap?.call(t),
-                      onToggleFocus: (t) => ref
-                          .read(taskRepositoryProvider)
-                          .setFocused(t, isFocused: !t.isFocused),
-                      showProjectName: true,
-                    ),
-                  const SizedBox(height: 80),
-                ]),
+              return SliverFillRemaining(
+                hasScrollBody: true,
+                child: ReorderableListView(
+                  onReorder: (o, n) => _onReorder(active, o, n),
+                  proxyDecorator: _proxyDecorator,
+                  footer: Column(
+                    children: [
+                      if (completed.isNotEmpty)
+                        CompletedSection(
+                          tasks: completed,
+                          onToggleComplete: (t) => _toggleComplete(t),
+                          onTaskTap: (t) => widget.onTaskTap?.call(t),
+                          onToggleFocus: (t) => ref
+                              .read(taskRepositoryProvider)
+                              .setFocused(t, isFocused: !t.isFocused),
+                          showProjectName: true,
+                        ),
+                      const SizedBox(height: 80),
+                    ],
+                  ),
+                  children: active
+                      .map((task) => TaskListItem(
+                            key: ValueKey(task.id),
+                            task: task,
+                            onToggleComplete: () => _toggleComplete(task),
+                            onTap: () => widget.onTaskTap?.call(task),
+                            onToggleFocus: () => ref
+                                .read(taskRepositoryProvider)
+                                .setFocused(task, isFocused: !task.isFocused),
+                            showProjectName: task.projectId != null,
+                          ))
+                      .toList(),
+                ),
               );
             },
           ),
@@ -90,15 +143,11 @@ class TodayView extends ConsumerWidget {
     );
   }
 
-  Future<void> _toggleComplete(
-    BuildContext context,
-    WidgetRef ref,
-    Task task,
-  ) async {
+  Future<void> _toggleComplete(Task task) async {
     final repo = ref.read(taskRepositoryProvider);
     final wasCompleted = task.completed;
     await repo.toggleComplete(task.id, completed: !wasCompleted);
-    if (!wasCompleted && context.mounted) {
+    if (!wasCompleted && mounted) {
       UndoSnackbar.show(
         context,
         message: '할 일을 완료했습니다',
@@ -106,18 +155,32 @@ class TodayView extends ConsumerWidget {
       );
     }
   }
+
+  Widget _proxyDecorator(Widget child, int index, Animation<double> anim) {
+    return AnimatedBuilder(
+      animation: anim,
+      builder: (context, child) => Material(
+        elevation: 4 * anim.value,
+        color: AppColors.surface,
+        borderRadius: BorderRadius.circular(8),
+        child: child,
+      ),
+      child: child,
+    );
+  }
 }
 
 // ---------------------------------------------------------------------------
-// Provider (뷰 로컬)
+// Provider
 // ---------------------------------------------------------------------------
 
 final _todayTasksProvider = StreamProvider.autoDispose<List<Task>>((ref) {
   final repo = ref.watch(taskRepositoryProvider);
   final today = _todayString();
-  return repo
-      .watchActiveTasks()
-      .map((tasks) => tasks.where((t) => t.isFocused || t.dueDate == today).toList());
+  return repo.watchActiveTasks().map(
+        (tasks) =>
+            tasks.where((t) => t.isFocused || t.dueDate == today).toList(),
+      );
 });
 
 String _todayString() {
@@ -146,13 +209,11 @@ class _TodayHeader extends StatelessWidget {
         children: [
           Text(
             '${now.month}월 ${now.day}일 ${weekdays[now.weekday % 7]}요일',
-            style: AppTextStyles.title(color: Colors.white.withValues(alpha: 0.85)),
+            style:
+                AppTextStyles.title(color: Colors.white.withValues(alpha: 0.85)),
           ),
           const SizedBox(height: 2),
-          Text(
-            '오늘',
-            style: AppTextStyles.display(color: Colors.white),
-          ),
+          Text('오늘', style: AppTextStyles.display(color: Colors.white)),
         ],
       ),
     );
@@ -165,24 +226,16 @@ class _TodayHeader extends StatelessWidget {
 
 class _LoadingBody extends StatelessWidget {
   const _LoadingBody();
-
   @override
-  Widget build(BuildContext context) {
-    return const Center(
-      child: CircularProgressIndicator(color: AppColors.accent),
-    );
-  }
+  Widget build(BuildContext context) =>
+      const Center(child: CircularProgressIndicator(color: AppColors.accent));
 }
 
 class _ErrorBody extends StatelessWidget {
   const _ErrorBody({required this.error});
-
   final String error;
-
   @override
-  Widget build(BuildContext context) {
-    return Center(
-      child: Text(error, style: AppTextStyles.body(color: AppColors.textMuted)),
-    );
-  }
+  Widget build(BuildContext context) => Center(
+        child: Text(error, style: AppTextStyles.body(color: AppColors.textMuted)),
+      );
 }
