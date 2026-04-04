@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_text_styles.dart';
+import '../../data/models/project_model.dart';
 import '../../data/models/task_model.dart';
 import '../../data/repositories/task_repository.dart';
 import '../../shared/providers/repository_providers.dart';
@@ -109,6 +110,44 @@ class _TaskDetailSheetState extends ConsumerState<TaskDetailSheet> {
     if (mounted) Navigator.of(context).pop();
   }
 
+  String _projectName(WidgetRef ref) {
+    final projects =
+        ref.watch(_projectsStreamProvider).valueOrNull ?? [];
+    return projects
+        .where((p) => p.id == _task.projectId)
+        .map((p) => p.name)
+        .firstOrNull ??
+        '프로젝트';
+  }
+
+  Future<void> _showProjectPicker(BuildContext context, WidgetRef ref) async {
+    final projects =
+        ref.read(_projectsStreamProvider).valueOrNull ?? [];
+
+    final picked = await showModalBottomSheet<String?>(
+      context: context,
+      backgroundColor: AppColors.surface,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(12)),
+      ),
+      builder: (context) => _ProjectPickerSheet(
+        projects: projects,
+        currentProjectId: _task.projectId,
+      ),
+    );
+
+    // picked == '' → Inbox로 이동, null → 취소
+    if (picked == null) return;
+    final newProjectId = picked.isEmpty ? null : picked;
+    await _repo.updateTask(
+      _task.id,
+      {'projectId': newProjectId},
+    );
+    setState(() => _task = newProjectId == null
+        ? _task.copyWith(clearProjectId: true)
+        : _task.copyWith(projectId: newProjectId));
+  }
+
   @override
   Widget build(BuildContext context) {
     return DraggableScrollableSheet(
@@ -190,6 +229,16 @@ class _TaskDetailSheetState extends ConsumerState<TaskDetailSheet> {
                           label: '반복',
                           trailing: _repeatLabel(_task.repeat),
                           onTap: () {}, // Phase 4에서 구현
+                        ),
+                        Consumer(
+                          builder: (context, ref, child) => _ActionTile(
+                            icon: Icons.folder_outlined,
+                            label: '프로젝트',
+                            trailing: _task.projectId != null
+                                ? _projectName(ref)
+                                : '없음',
+                            onTap: () => _showProjectPicker(context, ref),
+                          ),
                         ),
                       ],
                     ),
@@ -630,6 +679,96 @@ class _NotesSection extends StatelessWidget {
         onTapOutside: (_) => onSubmit(),
       ),
     );
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Provider + ProjectPickerSheet
+// ---------------------------------------------------------------------------
+
+final _projectsStreamProvider =
+    StreamProvider.autoDispose<List<Project>>((ref) {
+  final repo = ref.watch(projectRepositoryProvider);
+  return repo.watchProjects();
+});
+
+/// 프로젝트 선택 바텀시트.
+///
+/// 반환값: 선택한 projectId (빈 문자열 = Inbox로 이동), null = 취소
+class _ProjectPickerSheet extends StatelessWidget {
+  const _ProjectPickerSheet({
+    required this.projects,
+    this.currentProjectId,
+  });
+
+  final List<Project> projects;
+  final String? currentProjectId;
+
+  @override
+  Widget build(BuildContext context) {
+    return SafeArea(
+      child: Padding(
+        padding: const EdgeInsets.symmetric(vertical: 8),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Center(
+              child: Container(
+                width: 36,
+                height: 4,
+                margin: const EdgeInsets.only(bottom: 8),
+                decoration: BoxDecoration(
+                  color: AppColors.divider,
+                  borderRadius: BorderRadius.circular(9999),
+                ),
+              ),
+            ),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 4, 16, 8),
+              child: Text('프로젝트 선택',
+                  style: AppTextStyles.headline()),
+            ),
+            // Inbox (프로젝트 없음)
+            ListTile(
+              leading: const Icon(Icons.inbox_rounded,
+                  color: AppColors.textMuted, size: 20),
+              title: Text('Inbox',
+                  style: AppTextStyles.body(color: AppColors.textPrimary)),
+              trailing: currentProjectId == null
+                  ? const Icon(Icons.check_rounded,
+                      color: AppColors.accent, size: 18)
+                  : null,
+              onTap: () => Navigator.of(context).pop(''), // 빈 문자열 = Inbox
+            ),
+            const Divider(color: AppColors.divider, height: 1, indent: 16),
+            ...projects.map((p) {
+              final color = p.color != null
+                  ? _hexToColor(p.color!)
+                  : AppColors.projectBlue;
+              return ListTile(
+                leading: Icon(Icons.circle, color: color, size: 10),
+                title: Text(p.name,
+                    style: AppTextStyles.body(color: AppColors.textPrimary)),
+                trailing: currentProjectId == p.id
+                    ? const Icon(Icons.check_rounded,
+                        color: AppColors.accent, size: 18)
+                    : null,
+                onTap: () => Navigator.of(context).pop(p.id),
+              );
+            }),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Color _hexToColor(String hex) {
+    try {
+      final clean = hex.replaceAll('#', '');
+      return Color(int.parse('FF$clean', radix: 16));
+    } catch (_) {
+      return AppColors.projectBlue;
+    }
   }
 }
 

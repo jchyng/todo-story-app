@@ -3,7 +3,10 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_text_styles.dart';
+import '../../../data/models/project_model.dart';
 import '../../../data/models/task_model.dart';
+import '../../../features/project/screens/project_task_view.dart';
+import '../../../features/project/widgets/create_project_dialog.dart';
 import '../../../features/task_detail/task_detail_sheet.dart';
 import '../../../shared/providers/repository_providers.dart';
 import '../views/inbox_view.dart';
@@ -22,16 +25,14 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
   HomeView _currentView = HomeView.today;
   String? _selectedProjectId;
 
+  Project? get _selectedProject {
+    if (_selectedProjectId == null) return null;
+    final projects = ref.watch(_projectsProvider).valueOrNull ?? [];
+    return projects.where((p) => p.id == _selectedProjectId).firstOrNull;
+  }
+
   String get _appBarTitle {
-    if (_selectedProjectId != null) {
-      final projects =
-          ref.watch(_projectsProvider).valueOrNull ?? [];
-      return projects
-          .where((p) => p.id == _selectedProjectId)
-          .map((p) => p.name)
-          .firstOrNull ??
-          '프로젝트';
-    }
+    if (_selectedProject != null) return _selectedProject!.name;
     switch (_currentView) {
       case HomeView.inbox:
         return 'Inbox';
@@ -47,11 +48,16 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
   @override
   Widget build(BuildContext context) {
     final projects = ref.watch(_projectsProvider).valueOrNull ?? [];
+    final project = _selectedProject;
+    final isToday =
+        _currentView == HomeView.today && _selectedProjectId == null;
+    // ProjectTaskView는 자체 Scaffold를 가짐
+    final isProjectView = project != null;
 
     return Scaffold(
       backgroundColor: AppColors.background,
-      appBar: _currentView == HomeView.today
-          ? null // Today 뷰는 그라디언트 헤더를 자체적으로 가짐
+      appBar: isToday || isProjectView
+          ? null
           : AppBar(
               backgroundColor: AppColors.background,
               elevation: 0,
@@ -65,25 +71,17 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
         }),
         projects: projects,
         selectedProjectId: _selectedProjectId,
-        onProjectSelected: (id) => setState(() {
-          _selectedProjectId = id;
-        }),
+        onProjectSelected: (id) => setState(() => _selectedProjectId = id),
+        onCreateProject: () => CreateProjectDialog.show(context),
       ),
-      body: _buildBody(),
+      body: _buildBody(project),
     );
   }
 
-  Widget _buildBody() {
-    // 프로젝트 뷰 (Phase 3에서 구현)
-    if (_selectedProjectId != null) {
-      return Center(
-        child: Text(
-          'Phase 3에서 구현 예정',
-          style: AppTextStyles.body(color: AppColors.textMuted),
-        ),
-      );
+  Widget _buildBody(Project? project) {
+    if (project != null) {
+      return ProjectTaskView(project: project);
     }
-
     switch (_currentView) {
       case HomeView.inbox:
         return InboxView(onTaskTap: _openTaskDetail);
@@ -92,13 +90,11 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
       case HomeView.upcoming:
         return UpcomingView(onTaskTap: _openTaskDetail);
       case HomeView.trash:
-        return _TrashPlaceholder();
+        return const _TrashPlaceholder();
     }
   }
 
-  void _openTaskDetail(Task task) {
-    TaskDetailSheet.show(context, task);
-  }
+  void _openTaskDetail(Task task) => TaskDetailSheet.show(context, task);
 }
 
 // ---------------------------------------------------------------------------
@@ -111,15 +107,17 @@ final _projectsProvider = StreamProvider.autoDispose((ref) {
 });
 
 // ---------------------------------------------------------------------------
-// Placeholder 위젯 (Phase 2~3에서 교체)
+// Placeholder
 // ---------------------------------------------------------------------------
 
 class _TrashPlaceholder extends StatelessWidget {
+  const _TrashPlaceholder();
+
   @override
   Widget build(BuildContext context) {
     return Center(
       child: Text(
-        'Phase 3에서 구현 예정',
+        'Phase 4에서 구현 예정',
         style: AppTextStyles.body(color: AppColors.textMuted),
       ),
     );

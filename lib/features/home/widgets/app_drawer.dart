@@ -6,13 +6,14 @@ import 'package:google_sign_in/google_sign_in.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_text_styles.dart';
 import '../../../data/models/project_model.dart';
+import '../../../shared/providers/repository_providers.dart';
 
 enum HomeView { inbox, today, upcoming, trash }
 
 /// 사이드 드로어.
 ///
-/// 구성: 프로필 헤더 / 특수 뷰(Inbox·Today·Upcoming·Trash) / 프로젝트 목록 / Settings
-class AppDrawer extends ConsumerWidget {
+/// 프로젝트 목록은 DnD로 순서 변경 가능 (ReorderableListView).
+class AppDrawer extends ConsumerStatefulWidget {
   const AppDrawer({
     super.key,
     required this.currentView,
@@ -20,6 +21,7 @@ class AppDrawer extends ConsumerWidget {
     required this.projects,
     this.selectedProjectId,
     this.onProjectSelected,
+    this.onCreateProject,
   });
 
   final HomeView currentView;
@@ -27,10 +29,55 @@ class AppDrawer extends ConsumerWidget {
   final List<Project> projects;
   final String? selectedProjectId;
   final void Function(String projectId)? onProjectSelected;
+  final VoidCallback? onCreateProject;
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<AppDrawer> createState() => _AppDrawerState();
+}
+
+class _AppDrawerState extends ConsumerState<AppDrawer> {
+  List<Project>? _optimisticProjects;
+
+  void _onProjectReorder(int oldIndex, int newIndex) async {
+    if (newIndex > oldIndex) newIndex--;
+    final items = [...(widget.projects)];
+    final moved = items.removeAt(oldIndex);
+    items.insert(newIndex, moved);
+    setState(() => _optimisticProjects = items);
+
+    final prevOrder = newIndex > 0 ? items[newIndex - 1].order : null;
+    final nextOrder =
+        newIndex < items.length - 1 ? items[newIndex + 1].order : null;
+
+    double newOrder;
+    if (prevOrder == null && nextOrder == null) {
+      newOrder = 1000.0;
+    } else if (prevOrder == null) {
+      newOrder = nextOrder! / 2;
+    } else if (nextOrder == null) {
+      newOrder = prevOrder + 1000.0;
+    } else {
+      newOrder = (prevOrder + nextOrder) / 2;
+    }
+
+    final repo = ref.read(projectRepositoryProvider);
+    final needsRebalance = prevOrder != null &&
+        nextOrder != null &&
+        (nextOrder - prevOrder).abs() < 1e-10;
+
+    if (needsRebalance) {
+      await repo.rebalanceOrder(items);
+    } else {
+      await repo.updateOrder(moved.id, newOrder);
+    }
+
+    setState(() => _optimisticProjects = null);
+  }
+
+  @override
+  Widget build(BuildContext context) {
     final user = FirebaseAuth.instance.currentUser;
+    final projects = _optimisticProjects ?? widget.projects;
 
     return Drawer(
       backgroundColor: AppColors.surface,
@@ -50,11 +97,8 @@ class AppDrawer extends ConsumerWidget {
                         ? NetworkImage(user!.photoURL!)
                         : null,
                     child: user?.photoURL == null
-                        ? const Icon(
-                            Icons.person_rounded,
-                            color: AppColors.accent,
-                            size: 20,
-                          )
+                        ? const Icon(Icons.person_rounded,
+                            color: AppColors.accent, size: 20)
                         : null,
                   ),
                   const SizedBox(width: 10),
@@ -76,69 +120,112 @@ class AppDrawer extends ConsumerWidget {
             _DrawerNavItem(
               icon: Icons.inbox_rounded,
               label: 'Inbox',
-              selected: currentView == HomeView.inbox && selectedProjectId == null,
+              selected: widget.currentView == HomeView.inbox &&
+                  widget.selectedProjectId == null,
               onTap: () {
-                onViewChanged(HomeView.inbox);
+                widget.onViewChanged(HomeView.inbox);
                 Navigator.of(context).pop();
               },
             ),
             _DrawerNavItem(
               icon: Icons.today_rounded,
               label: '오늘',
-              selected: currentView == HomeView.today && selectedProjectId == null,
+              selected: widget.currentView == HomeView.today &&
+                  widget.selectedProjectId == null,
               onTap: () {
-                onViewChanged(HomeView.today);
+                widget.onViewChanged(HomeView.today);
                 Navigator.of(context).pop();
               },
             ),
             _DrawerNavItem(
               icon: Icons.calendar_month_rounded,
               label: '예정',
-              selected: currentView == HomeView.upcoming && selectedProjectId == null,
+              selected: widget.currentView == HomeView.upcoming &&
+                  widget.selectedProjectId == null,
               onTap: () {
-                onViewChanged(HomeView.upcoming);
+                widget.onViewChanged(HomeView.upcoming);
                 Navigator.of(context).pop();
               },
             ),
 
-            if (projects.isNotEmpty) ...[
-              const SizedBox(height: 8),
-              Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
-                child: Text(
-                  '프로젝트',
-                  style: AppTextStyles.label(color: AppColors.textMuted),
-                ),
+            // 프로젝트 섹션
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  if (projects.isNotEmpty || widget.onCreateProject != null) ...[
+                    const SizedBox(height: 8),
+                    Padding(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 16, vertical: 4),
+                      child: Row(
+                        children: [
+                          Text(
+                            '프로젝트',
+                            style:
+                                AppTextStyles.label(color: AppColors.textMuted),
+                          ),
+                          const Spacer(),
+                          if (widget.onCreateProject != null)
+                            GestureDetector(
+                              onTap: () {
+                                Navigator.of(context).pop();
+                                widget.onCreateProject!();
+                              },
+                              child: const Icon(Icons.add_rounded,
+                                  size: 18, color: AppColors.textMuted),
+                            ),
+                        ],
+                      ),
+                    ),
+                  ],
+                  // 프로젝트 목록 (DnD)
+                  Expanded(
+                    child: projects.isEmpty
+                        ? const SizedBox.shrink()
+                        : ReorderableListView(
+                            shrinkWrap: true,
+                            onReorder: _onProjectReorder,
+                            proxyDecorator:
+                                (child, index, anim) => Material(
+                              color: AppColors.surface,
+                              child: child,
+                            ),
+                            children: projects.map((p) {
+                              final color = p.color != null
+                                  ? _hexToColor(p.color!)
+                                  : AppColors.projectBlue;
+                              final selected =
+                                  widget.selectedProjectId == p.id;
+                              return _DrawerNavItem(
+                                key: ValueKey(p.id),
+                                icon: Icons.circle,
+                                iconColor: color,
+                                iconSize: 10,
+                                label: p.name,
+                                selected: selected,
+                                onTap: () {
+                                  widget.onProjectSelected?.call(p.id);
+                                  Navigator.of(context).pop();
+                                },
+                              );
+                            }).toList(),
+                          ),
+                  ),
+                ],
               ),
-              // 프로젝트 목록
-              ...projects.map((p) {
-                final color = p.color != null
-                    ? _hexToColor(p.color!)
-                    : AppColors.projectBlue;
-                return _DrawerNavItem(
-                  icon: Icons.circle,
-                  iconColor: color,
-                  iconSize: 10,
-                  label: p.name,
-                  selected: selectedProjectId == p.id,
-                  onTap: () {
-                    onProjectSelected?.call(p.id);
-                    Navigator.of(context).pop();
-                  },
-                );
-              }),
-            ],
+            ),
 
-            const Spacer(),
             const Divider(color: AppColors.divider, height: 1),
 
-            // 하단: Trash + Settings + 로그아웃
+            // 하단: Trash + 로그아웃
             _DrawerNavItem(
               icon: Icons.delete_outline_rounded,
               label: '휴지통',
-              selected: currentView == HomeView.trash && selectedProjectId == null,
+              selected: widget.currentView == HomeView.trash &&
+                  widget.selectedProjectId == null,
               onTap: () {
-                onViewChanged(HomeView.trash);
+                widget.onViewChanged(HomeView.trash);
                 Navigator.of(context).pop();
               },
             ),
@@ -171,6 +258,7 @@ class AppDrawer extends ConsumerWidget {
 
 class _DrawerNavItem extends StatelessWidget {
   const _DrawerNavItem({
+    super.key,
     required this.icon,
     required this.label,
     required this.selected,
@@ -197,9 +285,7 @@ class _DrawerNavItem extends StatelessWidget {
       leading: Icon(
         icon,
         size: iconSize,
-        color: selected
-            ? AppColors.accent
-            : (iconColor ?? AppColors.textMuted),
+        color: selected ? AppColors.accent : (iconColor ?? AppColors.textMuted),
       ),
       title: Text(
         label,
