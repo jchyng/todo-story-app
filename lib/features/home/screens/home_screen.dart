@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_text_styles.dart';
 import '../../../data/models/task_model.dart';
+import '../../../features/task_detail/task_detail_sheet.dart';
 import '../../../shared/providers/repository_providers.dart';
 import '../views/inbox_view.dart';
 import '../views/today_view.dart';
@@ -96,13 +97,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
   }
 
   void _openTaskDetail(Task task) {
-    // Phase 2 후반 — TaskDetailSheet 구현 시 연결
-    showModalBottomSheet(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: Colors.transparent,
-      builder: (context) => _TaskDetailPlaceholder(task: task),
-    );
+    TaskDetailSheet.show(context, task);
   }
 }
 
@@ -124,42 +119,8 @@ class _TrashPlaceholder extends StatelessWidget {
   Widget build(BuildContext context) {
     return Center(
       child: Text(
-        'Phase 2에서 구현 예정',
+        'Phase 3에서 구현 예정',
         style: AppTextStyles.body(color: AppColors.textMuted),
-      ),
-    );
-  }
-}
-
-class _TaskDetailPlaceholder extends StatelessWidget {
-  const _TaskDetailPlaceholder({required this.task});
-
-  final Task task;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      margin: const EdgeInsets.only(top: 64),
-      decoration: const BoxDecoration(
-        color: AppColors.surface,
-        borderRadius: BorderRadius.vertical(top: Radius.circular(12)),
-      ),
-      child: SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.all(24),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Text(task.title, style: AppTextStyles.headline()),
-              const SizedBox(height: 8),
-              Text(
-                '상세 편집 — Phase 2에서 구현 예정',
-                style: AppTextStyles.body(color: AppColors.textMuted),
-              ),
-            ],
-          ),
-        ),
       ),
     );
   }
