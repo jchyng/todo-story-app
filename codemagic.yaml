@@ -1,0 +1,74 @@
+workflows:
+  # ── PR / 브랜치 푸시: 빠른 검증 ──────────────────────────────────────────────
+  pr-check:
+    name: PR Check (analyze + test)
+    max_build_duration: 20
+    triggering:
+      events:
+        - pull_request
+      cancel_previous_builds: true
+    environment:
+      flutter: stable
+      java: 17
+    scripts:
+      - name: Flutter analyze
+        script: flutter analyze --fatal-infos
+      - name: Flutter test
+        script: flutter test
+    publishing:
+      email:
+        recipients:
+          - $EMAIL_ADDRESS
+        notify:
+          failure: true
+          success: false
+
+  # ── main 머지: 서명 빌드 → Play Store internal track ─────────────────────────
+  release-internal:
+    name: Release (Play Store internal)
+    max_build_duration: 60
+    triggering:
+      events:
+        - push
+      branch_patterns:
+        - pattern: main
+          include: true
+    environment:
+      flutter: stable
+      java: 17
+      android_signing:
+        - todo_story_keystore   # Codemagic 대시보드 > Code signing에 등록한 keystore 이름
+      groups:
+        - play_store            # GCLOUD_SERVICE_ACCOUNT_CREDENTIALS 환경변수 그룹
+        - firebase_dist         # FIREBASE_TOKEN 환경변수 그룹 (App Distribution용)
+    scripts:
+      - name: Flutter analyze
+        script: flutter analyze --fatal-infos
+      - name: Flutter test
+        script: flutter test
+      - name: Build signed AAB
+        script: |
+          flutter build appbundle \
+            --release \
+            --build-number=$BUILD_NUMBER
+    artifacts:
+      - build/app/outputs/bundle/release/*.aab
+      - build/app/outputs/mapping/release/mapping.txt  # ProGuard 난독화 매핑 (크래시 디버깅용)
+    publishing:
+      google_play:
+        credentials: $GCLOUD_SERVICE_ACCOUNT_CREDENTIALS
+        track: internal
+        submit_as_draft: false
+      # 팀 내 베타 배포 (선택): Firebase App Distribution
+      # firebase:
+      #   firebase_token: $FIREBASE_TOKEN
+      #   android:
+      #     app_id: $FIREBASE_APP_ID
+      #     groups:
+      #       - beta-testers
+      email:
+        recipients:
+          - $EMAIL_ADDRESS
+        notify:
+          failure: true
+          success: true
