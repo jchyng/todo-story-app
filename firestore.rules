@@ -1,0 +1,91 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // ========== 사용자 프로필 ==========
+    match /users/{userId} {
+      allow read: if request.auth != null && request.auth.uid == userId;
+      allow create: if request.auth != null && request.auth.uid == userId;
+      allow update: if request.auth != null && request.auth.uid == userId;
+      allow delete: if false; // Cloud Functions에서만 삭제
+
+      // ========== 민감 정보 서브컬렉션 ==========
+      // googleCalendarToken을 user document에 두면 document 전체 읽기 시 토큰이 노출된다.
+      // Firestore는 필드 수준 보안 규칙이 없으므로, 민감한 OAuth 토큰은
+      // users/{uid}/private/{doc} 서브컬렉션에 분리하여 별도 규칙을 적용한다.
+      // Cloud Functions는 Admin SDK로 이 서브컬렉션에 직접 접근한다.
+      //
+      // 현재 문서:
+      //   users/{uid}/private/googleCalendar  — GoogleCalendarCredential
+      match /private/{doc} {
+        allow read, write: if request.auth != null && request.auth.uid == userId;
+      }
+
+      // ========== 개인 태스크 ==========
+      match /tasks/{taskId} {
+        allow read, write: if request.auth != null && request.auth.uid == userId;
+      }
+    }
+
+    // ========== 프로젝트 ==========
+    match /projects/{projectId} {
+      // 멤버만 읽기 가능
+      allow read: if request.auth != null
+        && request.auth.uid in resource.data.memberIds;
+
+      // 생성: 인증된 사용자, 본인이 owner로 포함
+      allow create: if request.auth != null
+        && request.auth.uid == request.resource.data.ownerId
+        && request.auth.uid in request.resource.data.memberIds;
+
+      // 수정: owner만 (이름, 색상, order 변경)
+      allow update: if request.auth != null
+        && request.auth.uid == resource.data.ownerId;
+
+      // 삭제: owner만
+      allow delete: if request.auth != null
+        && request.auth.uid == resource.data.ownerId;
+
+      // ========== 프로젝트 태스크 ==========
+      match /tasks/{taskId} {
+        // 멤버 전원 읽기
+        allow read: if request.auth != null
+          && request.auth.uid in get(/databases/$(database)/documents/projects/$(projectId)).data.memberIds;
+
+        // owner, editor만 쓰기
+        allow create, update, delete: if request.auth != null
+          && request.auth.uid in get(/databases/$(database)/documents/projects/$(projectId)).data.memberIds
+          && getMemberRole(projectId, request.auth.uid) in ['owner', 'editor'];
+      }
+
+      // ========== 프로젝트 멤버 ==========
+      match /members/{memberId} {
+        allow read: if request.auth != null
+          && request.auth.uid in get(/databases/$(database)/documents/projects/$(projectId)).data.memberIds;
+        allow write: if false; // Cloud Functions에서만 관리
+      }
+
+      // ========== 초대 ==========
+      match /invites/{inviteId} {
+        allow read: if request.auth != null
+          && request.auth.uid == get(/databases/$(database)/documents/projects/$(projectId)).data.ownerId;
+        allow create: if request.auth != null
+          && request.auth.uid == get(/databases/$(database)/documents/projects/$(projectId)).data.ownerId;
+        allow delete: if request.auth != null
+          && request.auth.uid == get(/databases/$(database)/documents/projects/$(projectId)).data.ownerId;
+        allow update: if false; // Cloud Functions에서만 (useCount 증가)
+      }
+    }
+
+    // ========== 초대 토큰 역인덱스 ==========
+    match /inviteTokens/{token} {
+      allow read: if request.auth != null; // 토큰으로 프로젝트 찾기
+      allow write: if false; // Cloud Functions에서만
+    }
+
+    // ========== 헬퍼 함수 ==========
+    function getMemberRole(projectId, userId) {
+      return get(/databases/$(database)/documents/projects/$(projectId)/members/$(userId)).data.role;
+    }
+  }
+}
