@@ -8,7 +8,7 @@ import '../../../data/models/task_model.dart';
 import '../../../features/project/screens/project_task_view.dart';
 import '../../../features/project/widgets/create_project_dialog.dart';
 import '../../../features/task_detail/task_detail_sheet.dart';
-import '../../../features/timeline/timeline_screen.dart';
+import '../../../features/timeline/screens/timeline_screen.dart';
 import '../../../shared/providers/repository_providers.dart';
 import '../views/inbox_view.dart';
 import '../views/today_view.dart';

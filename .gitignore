@@ -53,3 +53,6 @@ lib/firebase_options.dart
 *.jks
 *.keystore
 key.properties
+
+# Flutter 로그
+*.log
