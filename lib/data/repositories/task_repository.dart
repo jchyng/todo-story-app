@@ -2,6 +2,18 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:uuid/uuid.dart';
 import '../models/task_model.dart';
 
+/// 리밸런싱 대상 태스크가 500개를 초과할 때 발생.
+///
+/// Firestore WriteBatch는 500개 제한이 있으며, 멀티 배치 부분 실패 시
+/// 순서가 반반 깨지는 위험이 있어 v1에서는 500개 초과를 허용하지 않는다.
+class TooManyTasksException implements Exception {
+  final int count;
+  const TooManyTasksException(this.count);
+
+  @override
+  String toString() => 'TooManyTasksException: $count개 태스크는 리밸런싱할 수 없습니다 (최대 500개).';
+}
+
 /// 개인 태스크의 Firestore CRUD + 실시간 스트림을 담당한다.
 ///
 /// 컬렉션 경로: users/{uid}/tasks/{taskId}
@@ -132,6 +144,7 @@ class TaskRepository {
       'completed': false,
       'isFocused': false,
       'projectId': task.projectId,
+      'notes': task.notes, // 메모는 다음 회차에도 유지
       'subtasks': [], // 서브태스크는 다음 회차에 초기화
       'order': nextOrder,
       'dueDate': nextDueDate,
@@ -206,26 +219,27 @@ class TaskRepository {
   ///
   /// [tasks]는 현재 순서대로 정렬된 태스크 목록.
   /// [useFocusOrder]가 true이면 focusOrder를 리밸런싱한다 (Today 뷰용).
+  ///
+  /// 500개 초과 시 [TooManyTasksException]을 throw한다.
+  /// 멀티 배치 부분 실패로 순서가 반반 깨지는 상황을 방지하기 위해
+  /// v1에서는 단일 배치(≤500개)만 허용한다.
   Future<void> rebalanceOrder(
     List<Task> tasks, {
     bool useFocusOrder = false,
   }) async {
-    const batchSize = 500; // Firestore WriteBatch 최대 500개
-    for (var i = 0; i < tasks.length; i += batchSize) {
-      final chunk = tasks.sublist(
-        i,
-        (i + batchSize).clamp(0, tasks.length),
-      );
-      final batch = _db.batch();
-      for (var j = 0; j < chunk.length; j++) {
-        final newOrder = (i + j + 1).toDouble();
-        batch.update(_tasks.doc(chunk[j].id), {
-          if (useFocusOrder) 'focusOrder': newOrder else 'order': newOrder,
-          'updatedAt': FieldValue.serverTimestamp(),
-        });
-      }
-      await batch.commit();
+    if (tasks.length > 500) {
+      throw TooManyTasksException(tasks.length);
     }
+
+    final batch = _db.batch();
+    for (var i = 0; i < tasks.length; i++) {
+      final newOrder = (i + 1).toDouble();
+      batch.update(_tasks.doc(tasks[i].id), {
+        if (useFocusOrder) 'focusOrder': newOrder else 'order': newOrder,
+        'updatedAt': FieldValue.serverTimestamp(),
+      });
+    }
+    await batch.commit();
   }
 
   // ---------------------------------------------------------------------------
