@@ -6,7 +6,29 @@ part of 'router.dart';
 // RiverpodGenerator
 // **************************************************************************
 
-String _$routerHash() => r'cc4af11b6242205bb49a4068bc074b687f6b74f4';
+String _$onboardingCompleteHash() =>
+    r'd257bb1d9a2d5c577a0fd39e19e6e29ab3a6c30e';
+
+/// 온보딩 완료 여부 — Firestore users/{uid}.onboarding.googleTasksImportSeen
+///
+/// null: 로딩 중 또는 미로그인 (리다이렉트 판단 보류)
+///
+/// Copied from [onboardingComplete].
+@ProviderFor(onboardingComplete)
+final onboardingCompleteProvider = AutoDisposeStreamProvider<bool?>.internal(
+  onboardingComplete,
+  name: r'onboardingCompleteProvider',
+  debugGetCreateSourceHash: const bool.fromEnvironment('dart.vm.product')
+      ? null
+      : _$onboardingCompleteHash,
+  dependencies: null,
+  allTransitiveDependencies: null,
+);
+
+@Deprecated('Will be removed in 3.0. Use Ref instead')
+// ignore: unused_element
+typedef OnboardingCompleteRef = AutoDisposeStreamProviderRef<bool?>;
+String _$routerHash() => r'64386839865f12b1f138d8827d7a7354586cdf4a';
 
 /// See also [router].
 @ProviderFor(router)
