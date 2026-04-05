@@ -8,6 +8,7 @@ import '../../../data/models/task_model.dart';
 import '../../../features/project/screens/project_task_view.dart';
 import '../../../features/project/widgets/create_project_dialog.dart';
 import '../../../features/task_detail/task_detail_sheet.dart';
+import '../../../features/timeline/timeline_screen.dart';
 import '../../../shared/providers/repository_providers.dart';
 import '../views/inbox_view.dart';
 import '../views/today_view.dart';
@@ -27,7 +28,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
 
   Project? get _selectedProject {
     if (_selectedProjectId == null) return null;
-    final projects = ref.watch(_projectsProvider).valueOrNull ?? [];
+    final projects = ref.watch(_allProjectsProvider).valueOrNull ?? [];
     return projects.where((p) => p.id == _selectedProjectId).firstOrNull;
   }
 
@@ -40,6 +41,8 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
         return '오늘';
       case HomeView.upcoming:
         return '예정';
+      case HomeView.timeline:
+        return '타임라인';
       case HomeView.trash:
         return '휴지통';
     }
@@ -47,16 +50,20 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final projects = ref.watch(_projectsProvider).valueOrNull ?? [];
+    final projects = ref.watch(_allProjectsProvider).valueOrNull ?? [];
+    final activeProjects = projects.where((p) => !p.isArchived).toList();
+    final archivedProjects = projects.where((p) => p.isArchived).toList();
     final project = _selectedProject;
     final isToday =
         _currentView == HomeView.today && _selectedProjectId == null;
-    // ProjectTaskView는 자체 Scaffold를 가짐
+    // ProjectTaskView와 TimelineScreen은 자체 Scaffold를 가짐
     final isProjectView = project != null;
+    final isTimeline =
+        _currentView == HomeView.timeline && _selectedProjectId == null;
 
     return Scaffold(
       backgroundColor: AppColors.background,
-      appBar: isToday || isProjectView
+      appBar: isToday || isProjectView || isTimeline
           ? null
           : AppBar(
               backgroundColor: AppColors.background,
@@ -69,7 +76,8 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
           _currentView = view;
           _selectedProjectId = null;
         }),
-        projects: projects,
+        projects: activeProjects,
+        archivedProjects: archivedProjects,
         selectedProjectId: _selectedProjectId,
         onProjectSelected: (id) => setState(() => _selectedProjectId = id),
         onCreateProject: () => CreateProjectDialog.show(context),
@@ -89,6 +97,8 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
         return TodayView(onTaskTap: _openTaskDetail);
       case HomeView.upcoming:
         return UpcomingView(onTaskTap: _openTaskDetail);
+      case HomeView.timeline:
+        return const TimelineScreen();
       case HomeView.trash:
         return const _TrashPlaceholder();
     }
@@ -101,7 +111,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
 // Provider (화면 로컬)
 // ---------------------------------------------------------------------------
 
-final _projectsProvider = StreamProvider.autoDispose((ref) {
+final _allProjectsProvider = StreamProvider.autoDispose((ref) {
   final repo = ref.watch(projectRepositoryProvider);
   return repo.watchProjects();
 });

@@ -308,6 +308,18 @@ class _ProjectMoreMenuState extends ConsumerState<_ProjectMoreMenu> {
                 label: '이름 변경',
                 onTap: () => setState(() => _editingName = true),
               ),
+            if (!widget.project.isArchived)
+              _MenuItem(
+                icon: Icons.inventory_2_outlined,
+                label: '완료 (보관)',
+                onTap: () => _archiveProject(context),
+              )
+            else
+              _MenuItem(
+                icon: Icons.unarchive_outlined,
+                label: '보관 해제',
+                onTap: () => _unarchiveProject(context),
+              ),
             _MenuItem(
               icon: Icons.delete_outline_rounded,
               label: '삭제',
@@ -333,6 +345,22 @@ class _ProjectMoreMenuState extends ConsumerState<_ProjectMoreMenu> {
       setState(() => _editingName = false);
       Navigator.of(context).pop();
     }
+  }
+
+  Future<void> _archiveProject(BuildContext context) async {
+    final navigator = Navigator.of(context);
+    await ref
+        .read(projectRepositoryProvider)
+        .archiveProject(widget.project.id);
+    if (mounted) navigator.pop();
+  }
+
+  Future<void> _unarchiveProject(BuildContext context) async {
+    final navigator = Navigator.of(context);
+    await ref
+        .read(projectRepositoryProvider)
+        .unarchiveProject(widget.project.id);
+    if (mounted) navigator.pop();
   }
 
   Future<void> _confirmDelete(BuildContext context) async {

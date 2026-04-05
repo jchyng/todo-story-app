@@ -8,7 +8,7 @@ import '../../../core/theme/app_text_styles.dart';
 import '../../../data/models/project_model.dart';
 import '../../../shared/providers/repository_providers.dart';
 
-enum HomeView { inbox, today, upcoming, trash }
+enum HomeView { inbox, today, upcoming, timeline, trash }
 
 /// 사이드 드로어.
 ///
@@ -19,6 +19,7 @@ class AppDrawer extends ConsumerStatefulWidget {
     required this.currentView,
     required this.onViewChanged,
     required this.projects,
+    required this.archivedProjects,
     this.selectedProjectId,
     this.onProjectSelected,
     this.onCreateProject,
@@ -27,6 +28,7 @@ class AppDrawer extends ConsumerStatefulWidget {
   final HomeView currentView;
   final void Function(HomeView) onViewChanged;
   final List<Project> projects;
+  final List<Project> archivedProjects;
   final String? selectedProjectId;
   final void Function(String projectId)? onProjectSelected;
   final VoidCallback? onCreateProject;
@@ -37,6 +39,7 @@ class AppDrawer extends ConsumerStatefulWidget {
 
 class _AppDrawerState extends ConsumerState<AppDrawer> {
   List<Project>? _optimisticProjects;
+  bool _archiveExpanded = false;
 
   void _onProjectReorder(int oldIndex, int newIndex) async {
     if (newIndex > oldIndex) newIndex--;
@@ -147,6 +150,16 @@ class _AppDrawerState extends ConsumerState<AppDrawer> {
                 Navigator.of(context).pop();
               },
             ),
+            _DrawerNavItem(
+              icon: Icons.timeline_rounded,
+              label: '타임라인',
+              selected: widget.currentView == HomeView.timeline &&
+                  widget.selectedProjectId == null,
+              onTap: () {
+                widget.onViewChanged(HomeView.timeline);
+                Navigator.of(context).pop();
+              },
+            ),
 
             // 프로젝트 섹션
             Expanded(
@@ -215,6 +228,51 @@ class _AppDrawerState extends ConsumerState<AppDrawer> {
                 ],
               ),
             ),
+
+            // 보관된 프로젝트 섹션
+            if (widget.archivedProjects.isNotEmpty) ...[
+              const Divider(color: AppColors.divider, height: 1),
+              InkWell(
+                onTap: () =>
+                    setState(() => _archiveExpanded = !_archiveExpanded),
+                child: Padding(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                  child: Row(
+                    children: [
+                      Text('보관된 프로젝트',
+                          style: AppTextStyles.label(color: AppColors.textMuted)),
+                      const Spacer(),
+                      Icon(
+                        _archiveExpanded
+                            ? Icons.expand_less_rounded
+                            : Icons.expand_more_rounded,
+                        size: 16,
+                        color: AppColors.textMuted,
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+              if (_archiveExpanded)
+                ...widget.archivedProjects.map((p) {
+                  final color = p.color != null
+                      ? _hexToColor(p.color!)
+                      : AppColors.projectBlue;
+                  return _DrawerNavItem(
+                    key: ValueKey('archived_${p.id}'),
+                    icon: Icons.circle,
+                    iconColor: color.withValues(alpha: 0.5),
+                    iconSize: 10,
+                    label: p.name,
+                    selected: widget.selectedProjectId == p.id,
+                    onTap: () {
+                      widget.onProjectSelected?.call(p.id);
+                      Navigator.of(context).pop();
+                    },
+                  );
+                }),
+            ],
 
             const Divider(color: AppColors.divider, height: 1),
 
