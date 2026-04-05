@@ -12,6 +12,7 @@ import '../../../features/timeline/timeline_screen.dart';
 import '../../../shared/providers/repository_providers.dart';
 import '../views/inbox_view.dart';
 import '../views/today_view.dart';
+import '../views/trash_view.dart';
 import '../views/upcoming_view.dart';
 import '../widgets/app_drawer.dart';
 
@@ -100,7 +101,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
       case HomeView.timeline:
         return const TimelineScreen();
       case HomeView.trash:
-        return const _TrashPlaceholder();
+        return const TrashView();
     }
   }
 
@@ -116,20 +117,3 @@ final _allProjectsProvider = StreamProvider.autoDispose((ref) {
   return repo.watchProjects();
 });
 
-// ---------------------------------------------------------------------------
-// Placeholder
-// ---------------------------------------------------------------------------
-
-class _TrashPlaceholder extends StatelessWidget {
-  const _TrashPlaceholder();
-
-  @override
-  Widget build(BuildContext context) {
-    return Center(
-      child: Text(
-        'Phase 4에서 구현 예정',
-        style: AppTextStyles.body(color: AppColors.textMuted),
-      ),
-    );
-  }
-}
