@@ -1,0 +1,29 @@
+{
+  "firestore": {
+    "rules": "firestore.rules",
+    "indexes": "firestore.indexes.json"
+  },
+  "flutter": {
+    "platforms": {
+      "android": {
+        "default": {
+          "projectId": "todo-story-app",
+          "appId": "1:743347256853:android:b7eff321faa66ecc0fd81c",
+          "fileOutput": "android/app/google-services.json"
+        }
+      },
+      "dart": {
+        "lib/firebase_options.dart": {
+          "projectId": "todo-story-app",
+          "configurations": {
+            "android": "1:743347256853:android:b7eff321faa66ecc0fd81c",
+            "ios": "1:743347256853:ios:7d839f3e2911b1090fd81c",
+            "macos": "1:743347256853:ios:7d839f3e2911b1090fd81c",
+            "web": "1:743347256853:web:f9990cf18e5066950fd81c",
+            "windows": "1:743347256853:web:72747b13ce95d29f0fd81c"
+          }
+        }
+      }
+    }
+  }
+}
