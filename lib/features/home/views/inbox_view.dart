@@ -23,13 +23,13 @@ class InboxView extends ConsumerStatefulWidget {
 }
 
 class _InboxViewState extends ConsumerState<InboxView> {
-  /// DnD 진행 중 Firestore 스트림이 덮어쓰지 않도록 낙관적 로컬 순서를 잠깐 유지.
   List<Task>? _optimisticActive;
+  bool _isRebalancing = false;
 
   void _onReorder(List<Task> active, int oldIndex, int newIndex) async {
     if (newIndex > oldIndex) newIndex--;
 
-    // 낙관적 UI 업데이트
+    final snapshot = [...active]; // 롤백용 스냅샷 (드래그 전 순서)
     final items = [...active];
     final moved = items.removeAt(oldIndex);
     items.insert(newIndex, moved);
@@ -42,19 +42,33 @@ class _InboxViewState extends ConsumerState<InboxView> {
     final newOrder = _computeOrder(prevOrder, nextOrder);
     final repo = ref.read(taskRepositoryProvider);
 
-    // gap이 너무 좁으면 전체 리밸런싱
     final needsRebalance = prevOrder != null &&
         nextOrder != null &&
         (nextOrder - prevOrder).abs() < 1e-10;
 
     if (needsRebalance) {
-      await repo.rebalanceOrder(items);
+      setState(() => _isRebalancing = true);
+      try {
+        await repo.rebalanceOrder(items);
+      } catch (_) {
+        if (!mounted) return;
+        setState(() {
+          _optimisticActive = snapshot;
+          _isRebalancing = false;
+        });
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Text('순서 변경에 실패했습니다. 다시 시도해주세요.',
+              style: AppTextStyles.body()),
+          backgroundColor: AppColors.surface,
+        ));
+        return;
+      }
+      if (mounted) setState(() => _isRebalancing = false);
     } else {
       await repo.updateOrder(moved.id, newOrder);
     }
 
-    // Firestore 스트림이 업데이트되면 낙관적 상태 해제
-    setState(() => _optimisticActive = null);
+    if (mounted) setState(() => _optimisticActive = null);
   }
 
   double _computeOrder(double? prev, double? next) {
@@ -68,7 +82,9 @@ class _InboxViewState extends ConsumerState<InboxView> {
   Widget build(BuildContext context) {
     final tasksAsync = ref.watch(_inboxTasksProvider);
 
-    return Scaffold(
+    return Stack(
+      children: [
+        Scaffold(
       backgroundColor: AppColors.background,
       body: tasksAsync.when(
         loading: () => const _LoadingBody(),
@@ -121,6 +137,18 @@ class _InboxViewState extends ConsumerState<InboxView> {
               );
         },
       ),
+        ),
+        if (_isRebalancing)
+          Positioned.fill(
+            child: AbsorbPointer(
+              child: Container(
+                color: Colors.black.withValues(alpha: 0.08),
+                alignment: Alignment.center,
+                child: const CircularProgressIndicator(color: AppColors.accent),
+              ),
+            ),
+          ),
+      ],
     );
   }
 

@@ -29,6 +29,7 @@ class ProjectTaskView extends ConsumerStatefulWidget {
 
 class _ProjectTaskViewState extends ConsumerState<ProjectTaskView> {
   List<Task>? _optimisticActive;
+  bool _isRebalancing = false;
 
   Color get _projectColor {
     final hex = widget.project.color;
@@ -44,6 +45,7 @@ class _ProjectTaskViewState extends ConsumerState<ProjectTaskView> {
   void _onReorder(List<Task> active, int oldIndex, int newIndex) async {
     if (newIndex > oldIndex) newIndex--;
 
+    final snapshot = [...active];
     final items = [...active];
     final moved = items.removeAt(oldIndex);
     items.insert(newIndex, moved);
@@ -61,12 +63,28 @@ class _ProjectTaskViewState extends ConsumerState<ProjectTaskView> {
         (nextOrder - prevOrder).abs() < 1e-10;
 
     if (needsRebalance) {
-      await repo.rebalanceOrder(items);
+      setState(() => _isRebalancing = true);
+      try {
+        await repo.rebalanceOrder(items);
+      } catch (_) {
+        if (!mounted) return;
+        setState(() {
+          _optimisticActive = snapshot;
+          _isRebalancing = false;
+        });
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Text('순서 변경에 실패했습니다. 다시 시도해주세요.',
+              style: AppTextStyles.body()),
+          backgroundColor: AppColors.surface,
+        ));
+        return;
+      }
+      if (mounted) setState(() => _isRebalancing = false);
     } else {
       await repo.updateOrder(moved.id, newOrder);
     }
 
-    setState(() => _optimisticActive = null);
+    if (mounted) setState(() => _optimisticActive = null);
   }
 
   double _computeOrder(double? prev, double? next) {
@@ -81,7 +99,9 @@ class _ProjectTaskViewState extends ConsumerState<ProjectTaskView> {
     final tasksAsync = ref.watch(_projectTasksProvider(widget.project.id));
     final color = _projectColor;
 
-    return Scaffold(
+    return Stack(
+      children: [
+        Scaffold(
       backgroundColor: AppColors.background,
       body: NestedScrollView(
         headerSliverBuilder: (context, innerBoxIsScrolled) => [
@@ -176,6 +196,18 @@ class _ProjectTaskViewState extends ConsumerState<ProjectTaskView> {
               );
         },
       ),
+        ),
+        if (_isRebalancing)
+          Positioned.fill(
+            child: AbsorbPointer(
+              child: Container(
+                color: Colors.black.withValues(alpha: 0.08),
+                alignment: Alignment.center,
+                child: const CircularProgressIndicator(color: AppColors.accent),
+              ),
+            ),
+          ),
+      ],
     );
   }
 

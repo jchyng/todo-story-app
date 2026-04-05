@@ -42,9 +42,11 @@ class AppDrawer extends ConsumerStatefulWidget {
 class _AppDrawerState extends ConsumerState<AppDrawer> {
   List<Project>? _optimisticProjects;
   bool _archiveExpanded = false;
+  bool _isRebalancing = false;
 
   void _onProjectReorder(int oldIndex, int newIndex) async {
     if (newIndex > oldIndex) newIndex--;
+    final snapshot = [...widget.projects];
     final items = [...(widget.projects)];
     final moved = items.removeAt(oldIndex);
     items.insert(newIndex, moved);
@@ -71,12 +73,28 @@ class _AppDrawerState extends ConsumerState<AppDrawer> {
         (nextOrder - prevOrder).abs() < 1e-10;
 
     if (needsRebalance) {
-      await repo.rebalanceOrder(items);
+      setState(() => _isRebalancing = true);
+      try {
+        await repo.rebalanceOrder(items);
+      } catch (_) {
+        if (!mounted) return;
+        setState(() {
+          _optimisticProjects = snapshot;
+          _isRebalancing = false;
+        });
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Text('순서 변경에 실패했습니다. 다시 시도해주세요.',
+              style: AppTextStyles.body()),
+          backgroundColor: AppColors.surface,
+        ));
+        return;
+      }
+      if (mounted) setState(() => _isRebalancing = false);
     } else {
       await repo.updateOrder(moved.id, newOrder);
     }
 
-    setState(() => _optimisticProjects = null);
+    if (mounted) setState(() => _optimisticProjects = null);
   }
 
   @override
@@ -90,6 +108,13 @@ class _AppDrawerState extends ConsumerState<AppDrawer> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
+            // 리밸런싱 진행 중 인디케이터
+            if (_isRebalancing)
+              LinearProgressIndicator(
+                color: AppColors.accent,
+                backgroundColor: AppColors.accent.withValues(alpha: 0.12),
+                minHeight: 2,
+              ),
             // 프로필 헤더
             Padding(
               padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),

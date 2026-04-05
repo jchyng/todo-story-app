@@ -26,10 +26,12 @@ class TodayView extends ConsumerStatefulWidget {
 
 class _TodayViewState extends ConsumerState<TodayView> {
   List<Task>? _optimisticActive;
+  bool _isRebalancing = false;
 
   void _onReorder(List<Task> active, int oldIndex, int newIndex) async {
     if (newIndex > oldIndex) newIndex--;
 
+    final snapshot = [...active];
     final items = [...active];
     final moved = items.removeAt(oldIndex);
     items.insert(newIndex, moved);
@@ -50,12 +52,28 @@ class _TodayViewState extends ConsumerState<TodayView> {
         (nextOrder - prevOrder).abs() < 1e-10;
 
     if (needsRebalance) {
-      await repo.rebalanceOrder(items, useFocusOrder: true);
+      setState(() => _isRebalancing = true);
+      try {
+        await repo.rebalanceOrder(items, useFocusOrder: true);
+      } catch (_) {
+        if (!mounted) return;
+        setState(() {
+          _optimisticActive = snapshot;
+          _isRebalancing = false;
+        });
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Text('순서 변경에 실패했습니다. 다시 시도해주세요.',
+              style: AppTextStyles.body()),
+          backgroundColor: AppColors.surface,
+        ));
+        return;
+      }
+      if (mounted) setState(() => _isRebalancing = false);
     } else {
       await repo.updateFocusOrder(moved.id, newOrder);
     }
 
-    setState(() => _optimisticActive = null);
+    if (mounted) setState(() => _optimisticActive = null);
   }
 
   double _computeOrder(double? prev, double? next) {
@@ -69,7 +87,9 @@ class _TodayViewState extends ConsumerState<TodayView> {
   Widget build(BuildContext context) {
     final tasksAsync = ref.watch(_todayTasksProvider);
 
-    return Scaffold(
+    return Stack(
+      children: [
+        Scaffold(
       backgroundColor: AppColors.background,
       body: CustomScrollView(
         slivers: [
@@ -140,6 +160,18 @@ class _TodayViewState extends ConsumerState<TodayView> {
               );
         },
       ),
+        ),
+        if (_isRebalancing)
+          Positioned.fill(
+            child: AbsorbPointer(
+              child: Container(
+                color: Colors.black.withValues(alpha: 0.08),
+                alignment: Alignment.center,
+                child: const CircularProgressIndicator(color: AppColors.accent),
+              ),
+            ),
+          ),
+      ],
     );
   }
 
