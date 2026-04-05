@@ -33,6 +33,9 @@ dependencies:
   share_plus: ^10.1.4
   shared_preferences: ^2.3.5
 
+  # UI
+  shimmer: ^3.0.0   # Skeleton loading placeholder (DEV_PLAN 인터랙션 상태 스펙)
+
 dev_dependencies:
   flutter_test:
     sdk: flutter
@@ -41,6 +44,7 @@ dev_dependencies:
   riverpod_generator: ^2.6.1
   custom_lint: ^0.7.3
   riverpod_lint: ^2.6.1
+  fake_cloud_firestore: ^3.0.3   # Firestore mock (CEO 리뷰 합의 테스트용)
 
 flutter:
   uses-material-design: true
