@@ -95,6 +95,22 @@ class ProjectRepository {
     await batch.commit();
   }
 
+  /// 프로젝트 보관 (완료 상태로 전환, 삭제 아님).
+  Future<void> archiveProject(String id) async {
+    await _projects.doc(id).update({
+      'isArchived': true,
+      'updatedAt': FieldValue.serverTimestamp(),
+    });
+  }
+
+  /// 보관된 프로젝트 복원 (활성 상태로 되돌리기).
+  Future<void> unarchiveProject(String id) async {
+    await _projects.doc(id).update({
+      'isArchived': false,
+      'updatedAt': FieldValue.serverTimestamp(),
+    });
+  }
+
   /// 프로젝트 삭제
   /// 하위 tasks의 projectId 정리는 Cloud Function에서 처리한다.
   Future<void> deleteProject(String id) async {

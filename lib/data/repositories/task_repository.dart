@@ -28,6 +28,18 @@ class TaskRepository {
         .map((snap) => snap.docs.map(Task.fromFirestore).toList());
   }
 
+  /// 완료 태스크 스트림 — Timeline 화면용.
+  ///
+  /// completed == true, deletedAt == null, completedAt 내림차순.
+  Stream<List<Task>> watchCompletedTasks() {
+    return _tasks
+        .where('completed', isEqualTo: true)
+        .where('deletedAt', isNull: true)
+        .orderBy('completedAt', descending: true)
+        .snapshots()
+        .map((snap) => snap.docs.map(Task.fromFirestore).toList());
+  }
+
   /// Trash 태스크 스트림 (deletedAt != null)
   Stream<List<Task>> watchTrashTasks() {
     return _tasks

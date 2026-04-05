@@ -15,6 +15,9 @@ class Project {
   /// 드로어 정렬 (fractional indexing)
   final double order;
 
+  /// true이면 "완료 (보관)" 상태 — 드로어 하단 보관 섹션에 표시
+  final bool isArchived;
+
   final DateTime createdAt;
   final DateTime updatedAt;
 
@@ -31,6 +34,7 @@ class Project {
     required this.createdAt,
     required this.updatedAt,
     this.color,
+    this.isArchived = false,
     this.currentUserRole,
     this.memberCount = 1,
   });
@@ -44,6 +48,7 @@ class Project {
       ownerId: data['ownerId'] as String,
       memberIds: (data['memberIds'] as List<dynamic>?)?.cast<String>() ?? [],
       order: (data['order'] as num?)?.toDouble() ?? 1000.0,
+      isArchived: data['isArchived'] as bool? ?? false,
       createdAt: (data['createdAt'] as Timestamp).toDate(),
       updatedAt: (data['updatedAt'] as Timestamp).toDate(),
       memberCount: data['memberCount'] as int? ?? 1,
@@ -57,6 +62,7 @@ class Project {
       'ownerId': ownerId,
       'memberIds': memberIds,
       'order': order,
+      'isArchived': isArchived,
       'memberCount': memberCount,
       'createdAt': Timestamp.fromDate(createdAt),
       'updatedAt': Timestamp.fromDate(updatedAt),
@@ -68,6 +74,7 @@ class Project {
     String? color,
     List<String>? memberIds,
     double? order,
+    bool? isArchived,
     DateTime? updatedAt,
     String? currentUserRole,
     int? memberCount,
@@ -80,6 +87,7 @@ class Project {
       ownerId: ownerId,
       memberIds: memberIds ?? this.memberIds,
       order: order ?? this.order,
+      isArchived: isArchived ?? this.isArchived,
       createdAt: createdAt,
       updatedAt: updatedAt ?? this.updatedAt,
       currentUserRole: currentUserRole ?? this.currentUserRole,
