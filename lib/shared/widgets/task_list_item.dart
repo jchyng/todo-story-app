@@ -23,7 +23,7 @@ class TaskListItem extends StatefulWidget {
   });
 
   final Task task;
-  final VoidCallback onToggleComplete;
+  final Future<void> Function() onToggleComplete;
   final VoidCallback onTap;
 
   /// Today 뷰에서 별 아이콘 표시 시 사용. null이면 별 아이콘 없음.
@@ -44,6 +44,9 @@ class _TaskListItemState extends State<TaskListItem>
     with SingleTickerProviderStateMixin {
   late final AnimationController _checkAnim;
   late final Animation<double> _fillAnim;
+
+  /// Firestore 완료 처리 중 연속 탭을 무시하기 위한 플래그.
+  bool _isToggling = false;
 
   @override
   void initState() {
@@ -87,9 +90,15 @@ class _TaskListItemState extends State<TaskListItem>
           children: [
             // 체크박스
             GestureDetector(
-              onTap: () {
+              onTap: () async {
+                if (_isToggling) return;
+                _isToggling = true;
                 HapticFeedback.mediumImpact();
-                widget.onToggleComplete();
+                try {
+                  await widget.onToggleComplete();
+                } finally {
+                  if (mounted) _isToggling = false;
+                }
               },
               child: _AnimatedCheckbox(
                 animation: _fillAnim,

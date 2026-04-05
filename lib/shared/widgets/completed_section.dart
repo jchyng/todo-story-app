@@ -21,7 +21,7 @@ class CompletedSection extends StatefulWidget {
   });
 
   final List<Task> tasks;
-  final void Function(Task) onToggleComplete;
+  final Future<void> Function(Task) onToggleComplete;
   final void Function(Task) onTaskTap;
   final void Function(Task)? onToggleFocus;
   final Color? projectColor;
@@ -104,7 +104,7 @@ class _CompletedSectionState extends State<CompletedSection>
               return TaskListItem(
                 key: ValueKey(task.id),
                 task: task,
-                onToggleComplete: () => widget.onToggleComplete(task),
+                onToggleComplete: () => widget.onToggleComplete(task),  // async propagated via Future
                 onTap: () => widget.onTaskTap(task),
                 onToggleFocus: widget.onToggleFocus != null
                     ? () => widget.onToggleFocus!(task)
