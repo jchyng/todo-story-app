@@ -56,6 +56,13 @@ class Task {
   /// Google Calendar에 생성된 이벤트 ID (캘린더 연동 시 설정)
   final String? calendarEventId;
 
+  /// Google Tasks에서 임포트된 태스크의 원본 ID.
+  ///
+  /// ImportService는 임포트 전 이 값으로 이미 존재하는 태스크를 쿼리한다.
+  /// 존재하면 skip (중복 임포트 방지). Firestore 인덱스 필요:
+  /// `users/{uid}/tasks` where `googleTasksId == targetId`
+  final String? googleTasksId;
+
   final DateTime? completedAt;
 
   /// null = 활성, non-null = Trash
@@ -95,6 +102,7 @@ class Task {
     this.completionNonce,
     this.calendarSyncStatus,
     this.calendarEventId,
+    this.googleTasksId,
     this.completedAt,
     this.deletedAt,
     this.reminderOffset,
@@ -132,6 +140,7 @@ class Task {
       completionNonce: data['completionNonce'] as String?,
       calendarSyncStatus: data['calendarSyncStatus'] as String?,
       calendarEventId: data['calendarEventId'] as String?,
+      googleTasksId: data['googleTasksId'] as String?,
       completedAt: (data['completedAt'] as Timestamp?)?.toDate(),
       deletedAt: (data['deletedAt'] as Timestamp?)?.toDate(),
       reminderOffset: data['reminderOffset'] as int?,
@@ -163,6 +172,7 @@ class Task {
       'completionNonce': completionNonce,
       'calendarSyncStatus': calendarSyncStatus,
       'calendarEventId': calendarEventId,
+      'googleTasksId': googleTasksId,
       'completedAt': completedAt != null ? Timestamp.fromDate(completedAt!) : null,
       'deletedAt': deletedAt != null ? Timestamp.fromDate(deletedAt!) : null,
       'reminderOffset': reminderOffset,
@@ -193,6 +203,7 @@ class Task {
     String? completionNonce,
     String? calendarSyncStatus,
     String? calendarEventId,
+    String? googleTasksId,
     DateTime? completedAt,
     DateTime? deletedAt,
     int? reminderOffset,
@@ -214,6 +225,7 @@ class Task {
     bool clearCompletionNonce = false,
     bool clearCalendarSyncStatus = false,
     bool clearCalendarEventId = false,
+    bool clearGoogleTasksId = false,
     bool clearCompletedAt = false,
     bool clearDeletedAt = false,
     bool clearReminderOffset = false,
@@ -237,6 +249,7 @@ class Task {
       completionNonce: clearCompletionNonce ? null : (completionNonce ?? this.completionNonce),
       calendarSyncStatus: clearCalendarSyncStatus ? null : (calendarSyncStatus ?? this.calendarSyncStatus),
       calendarEventId: clearCalendarEventId ? null : (calendarEventId ?? this.calendarEventId),
+      googleTasksId: clearGoogleTasksId ? null : (googleTasksId ?? this.googleTasksId),
       completedAt: clearCompletedAt ? null : (completedAt ?? this.completedAt),
       deletedAt: clearDeletedAt ? null : (deletedAt ?? this.deletedAt),
       reminderOffset: clearReminderOffset ? null : (reminderOffset ?? this.reminderOffset),
