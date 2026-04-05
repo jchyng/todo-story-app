@@ -186,9 +186,8 @@ class _InboxViewState extends ConsumerState<InboxView> {
 // Provider
 // ---------------------------------------------------------------------------
 
-final _inboxTasksProvider = StreamProvider.autoDispose<List<Task>>((ref) {
-  final repo = ref.watch(taskRepositoryProvider);
-  return repo.watchActiveTasks().map(
+final _inboxTasksProvider = Provider.autoDispose<AsyncValue<List<Task>>>((ref) {
+  return ref.watch(activeTasksStreamProvider).whenData(
         (tasks) => tasks.where((t) => t.projectId == null).toList(),
       );
 });

@@ -206,10 +206,9 @@ class _TodayViewState extends ConsumerState<TodayView> {
 // Provider
 // ---------------------------------------------------------------------------
 
-final _todayTasksProvider = StreamProvider.autoDispose<List<Task>>((ref) {
-  final repo = ref.watch(taskRepositoryProvider);
+final _todayTasksProvider = Provider.autoDispose<AsyncValue<List<Task>>>((ref) {
   final today = _todayString();
-  return repo.watchActiveTasks().map(
+  return ref.watch(activeTasksStreamProvider).whenData(
         (tasks) =>
             tasks.where((t) => t.isFocused || t.dueDate == today).toList(),
       );

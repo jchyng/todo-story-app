@@ -101,9 +101,8 @@ class UpcomingView extends ConsumerWidget {
 // Provider (뷰 로컬)
 // ---------------------------------------------------------------------------
 
-final _upcomingTasksProvider = StreamProvider.autoDispose<List<Task>>((ref) {
-  final repo = ref.watch(taskRepositoryProvider);
-  return repo.watchActiveTasks().map(
+final _upcomingTasksProvider = Provider.autoDispose<AsyncValue<List<Task>>>((ref) {
+  return ref.watch(activeTasksStreamProvider).whenData(
         (tasks) => tasks.where((t) => t.dueDate != null).toList()
           ..sort((a, b) => a.dueDate!.compareTo(b.dueDate!)),
       );
