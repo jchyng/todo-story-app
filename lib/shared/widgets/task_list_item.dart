@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_text_styles.dart';
@@ -86,7 +87,10 @@ class _TaskListItemState extends State<TaskListItem>
           children: [
             // 체크박스
             GestureDetector(
-              onTap: widget.onToggleComplete,
+              onTap: () {
+                HapticFeedback.mediumImpact();
+                widget.onToggleComplete();
+              },
               child: _AnimatedCheckbox(
                 animation: _fillAnim,
                 accentColor: accentColor,
