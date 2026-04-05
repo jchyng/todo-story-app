@@ -3,6 +3,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_sign_in/google_sign_in.dart';
 
+import '../../../features/settings/settings_screen.dart';
+
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_text_styles.dart';
 import '../../../data/models/project_model.dart';
@@ -285,6 +287,18 @@ class _AppDrawerState extends ConsumerState<AppDrawer> {
               onTap: () {
                 widget.onViewChanged(HomeView.trash);
                 Navigator.of(context).pop();
+              },
+            ),
+            _DrawerNavItem(
+              icon: Icons.settings_outlined,
+              label: '설정',
+              selected: false,
+              onTap: () {
+                Navigator.of(context).pop();
+                Navigator.of(context).push(
+                  MaterialPageRoute(
+                      builder: (_) => const SettingsScreen()),
+                );
               },
             ),
             _DrawerNavItem(
